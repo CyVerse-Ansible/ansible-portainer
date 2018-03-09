@@ -9,6 +9,14 @@
     - python-pip
   when: ansible_distribution == "Ubuntu"
 
+- name: install system dependencies for Centos
+  yum:
+    name: "{{ item }}"
+  with_items:
+    - apache2-utils
+    - python2-pip
+  when: ansible_distribution == "CentOS"
+
 - name: upgrade pip!
   pip:
     name: pip
