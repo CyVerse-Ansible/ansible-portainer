@@ -13,7 +13,7 @@
   yum:
     name: "{{ item }}"
   with_items:
-    - apache2-utils
+    - httpd-tools
     - python2-pip
   when: ansible_distribution == "CentOS"
 
