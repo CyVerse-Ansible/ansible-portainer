@@ -1,0 +1,95 @@
+---
+# tasks file for ansible-portainer
+
+- name: install system dependencies for Ubuntu
+  apt:
+    name: "{{ item }}"
+  with_items:
+    - apache2-utils
+    - python-pip
+  when: ansible_distribution == "Ubuntu"
+
+- name: upgrade pip!
+  pip:
+    name: pip
+    state: latest
+
+- name: install pip dependencies
+  pip:
+    name: "{{ item }}"
+  with_items:
+    - docker-py
+
+- name: pull the docker image
+  docker_image:
+    name: "{{ PORTAINER_DOCKER_IMAGE }}"
+
+- name: create directory PORTAINER_DATA_DIR
+  file:
+    path: "{{ PORTAINER_DATA_DIR }}"
+    state: directory
+    mode: "0755"
+
+- name: delete portainer password file if PORTAINER_REFRESH_PASSWORD is true
+  file:
+    path: "{{ PORTAINER_ADMIN_PASS_FILE }}"
+    state: absent
+  when: PORTAINER_REFRESH_PASSWORD is defined and PORTAINER_REFRESH_PASSWORD
+
+- name: check the existence of the portainer admin password file
+  stat: 
+    path: "{{ PORTAINER_ADMIN_PASS_FILE }}"
+  register: pfile
+  
+- name: if portainer admin pass file is not found, then do steps to generate a new file
+  block:
+    - name: create a random password
+      shell: < /dev/urandom tr -dc _A-Z-a-z-0-9#^~ | head -c${1:-32} 
+      register: portainer_pass
+
+    - name: write the password to password file
+      copy: 
+        content: "{{ portainer_pass.stdout }}\n"
+        dest: "{{ PORTAINER_ADMIN_PASS_FILE }}"
+        mode: 0644
+  when: pfile.stat.exists == False
+
+- name: load the password if we didn't generate it previously
+  shell: "cat {{ PORTAINER_ADMIN_PASS_FILE }}"
+  register: portainer_pass
+
+- debug:
+    var: portainer_pass
+
+- name: create a htpassword version of the portainer admin
+  shell: "htpasswd -nb -B admin {{ portainer_pass.stdout }} | cut -d ':' -f 2"
+  register: portainer_pass_enc
+
+#- debug:
+#    var: portainer_pass_enc
+
+- name: copy over the portainer script
+  template:
+    src: portainer_run.j2
+    dest: "{{ PORTAINER_DATA_DIR }}/portainer_run"
+    mode: 0755
+
+- name: link the portainer_run script in /usr/local/bin
+  file:
+    src: "{{ PORTAINER_DATA_DIR }}/portainer_run"
+    dest: /usr/local/bin/portainer_run
+    state: link
+
+- name: launch the portainer docker
+  docker_container:
+    name: portainer
+    image: "{{ PORTAINER_DOCKER_IMAGE }}"
+    state: started
+    detach: true
+    recreate: yes
+    restart_policy: always
+    published_ports: 
+      - "9000:9000"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    command: "-H unix:///var/run/docker.sock --admin-password '{{ portainer_pass_enc.stdout }}'"

@@ -1,0 +1,7 @@
+---
+# defaults file for ansible-portainer
+PORTAINER_DOCKER_IMAGE: "portainer/portainer"
+
+PORTAINER_DATA_DIR: "/opt/cyverse_portainer"
+
+PORTAINER_ADMIN_PASS_FILE: "/opt/cyverse_portainer/admin.pass"

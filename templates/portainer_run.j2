@@ -1,0 +1,36 @@
+#!/bin/bash
+
+portainer_pass_file={{ PORTAINER_ADMIN_PASS_FILE }}
+
+pass=`cat $portainer_pass_file`
+pass_enc=`htpasswd -nb -B admin $pass | cut -d ':' -f 2`
+
+# remove the portainer container
+echo "Removing any existing portainer container"
+docker rm -f portainer >/dev/null 2>&1
+
+echo "Starting portainer container"
+docker run -d -p 9000:9000 --restart always -v /var/run/docker.sock:/var/run/docker.sock \
+  --name portainer {{ PORTAINER_DOCKER_IMAGE  }} -H unix:///var/run/docker.sock \
+  --admin-password "$pass_enc"
+
+if [ $? -eq 0 ]; then
+
+	# is it a safe assumption that this exists?!?!
+	source /etc/profile.d/cyverse10-utils.sh
+	cyverse_public_ip
+
+	echo "Portainer started successfully"
+	echo ""
+	echo "To access portainer, use the following url: http://${CYVERSE_PUBLIC_IP}:9000"
+	echo ""
+	echo "This is the admin password: "
+	echo ""
+	echo "	$pass"
+	echo ""
+	echo "Note 1: the portainer admin password can always be found in: $portainer_pass_file"
+	echo "Note 2: if you ever need to restart the portainer container, type: portainer_run "
+	echo ""
+else
+	echo "Portainer was NOT started successfully. Is something wrong with docker?"
+fi
